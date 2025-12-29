@@ -17,8 +17,8 @@ It is about being able to explain and implement:
 * Why **private subnets + NAT** for outbound access
 * How to isolate **DEV and PROD** safely
 * How to expose APIs without exposing servers
-* How to use **AWS-native messaging** (SNS/SQS/DLQ)
-* How to design for AZ failure and cost optimization
+* How to use **AWS-native messaging** (**SNS/SQS/DLQ**)
+* How to design for **AZ failure** and **cost optimization**
 
 ---
 
@@ -37,11 +37,22 @@ It is about being able to explain and implement:
 
 ## ⚡️ Architecture Overview (Phase-based)
 
-The system evolves through **phases**, each mapped to common **SAA exam domains**.
+The system evolves through **phases**, each intentionally mapped to common **SAA exam domains**.
+
+### Phase 0 — Setup & Guardrails (PREP)
+
+**Deliverables**
+
+* Route 53 Hosted Zone (`pelsmi11.website`) + subdomain records
+* ACM certificates (CloudFront in `us-east-1`, ALB in `us-east-1`)
+* Naming + tagging conventions (`Project=movie-reservation`, `Env=dev|prod`)
+* Account security basics (MFA, least privilege, no root usage)
+
+---
 
 ### Phase 1 — Core AWS Architecture (FOUNDATION)
 
-> Covers ~65–70% of SAA concepts
+> Covers a big portion of SAA fundamentals
 
 **Architecture Pattern**
 
@@ -59,12 +70,14 @@ The system evolves through **phases**, each mapped to common **SAA exam domains*
 * Internet Gateway (IGW)
 * NAT Gateway
 * ALB + Target Groups
-* ECS Fargate
+* ECS Fargate + ECR
 * RDS PostgreSQL
 * S3 + CloudFront
 * Route 53 + ACM
 * CloudWatch
 * IAM
+
+---
 
 ### Phase 2 — Event-driven & Decoupling (MESSAGING)
 
@@ -72,8 +85,26 @@ The system evolves through **phases**, each mapped to common **SAA exam domains*
 
 * **SNS** for publishing domain events
 * **SQS** for service-specific consumption
-* **DLQ** for failed processing
-* Optional: **EventBridge** for broader event routing
+* **DLQ** for failed processing and retry strategy
+* Optional: **EventBridge** for broader routing and integrations
+
+---
+
+### Phase 2.5 — Security Deepening (SAA SECURITY BOOST)
+
+> Adds the “security depth” often seen in SAA scenarios
+
+* **KMS (CMK)** for:
+
+  * S3 bucket encryption (SSE-KMS)
+  * SSM SecureString / Secrets Manager encryption
+  * (optional) RDS storage encryption
+* **AWS WAF** on ALB (managed rules for SQLi/XSS, rate limiting)
+* **CloudTrail** enabled for auditing
+* **GuardDuty** enabled for threat detection
+* **Inspector** baseline scanning (containers/compute where applicable)
+
+---
 
 ### Phase 3 — Performance & Reliability (CACHING + DR)
 
@@ -81,6 +112,9 @@ The system evolves through **phases**, each mapped to common **SAA exam domains*
 * **RDS Multi-AZ** and backup/restore drills
 * Optional: **Read Replica** for scale and reporting
 * Optional: **S3 lifecycle + replication** (CRR) to practice durability patterns
+* Optional: **Lambda** triggered by S3 uploads → thumbnail generation
+
+---
 
 ### Phase 4 — Optional Kubernetes/Kong (ADVANCED)
 
@@ -88,6 +122,20 @@ The system evolves through **phases**, each mapped to common **SAA exam domains*
 * GitOps (ArgoCD)
 
 > Phase 4 is **not required** for SAA. It’s a post-certification upgrade path.
+
+---
+
+### Phase 5 — Cost Optimization (FINOPS DRILLS)
+
+* **AWS Budgets** + alerts
+* **Cost Explorer** review cadence
+* S3 storage class strategies (e.g., lifecycle to IA/Glacier where it makes sense)
+* Documented trade-offs:
+
+  * 1 NAT (cheap) vs 2 NAT (HA)
+  * RDS Single-AZ dev vs Multi-AZ prod
+  * Fargate vs EC2
+  * On-Demand vs Savings Plans/Reserved (conceptual)
 
 ---
 
@@ -156,11 +204,11 @@ ALB is cheaper/simpler and directly aligned to SAA topics (LBs, routing, health 
 
 ### Phase 2 — Business Expansion + Messaging
 
-| Service                  | Responsibility                      | Messaging                 |
-| ------------------------ | ----------------------------------- | ------------------------- |
-| **ticket-service**       | Bookings, cancellation, history     | publishes `ticket_issued` |
-| **reporting-service**    | Aggregates events, exports, reports | consumes events (SQS)     |
-| **notification-service** | Email notifications                 | consumes events (SQS)     |
+| Service                  | Responsibility                      | Messaging                       |
+| ------------------------ | ----------------------------------- | ------------------------------- |
+| **ticket-service**       | Bookings, cancellation, history     | publishes `ticket_issued` (SNS) |
+| **reporting-service**    | Aggregates events, exports, reports | consumes events (SQS + DLQ)     |
+| **notification-service** | Email notifications                 | consumes events (SQS + DLQ)     |
 
 ### Phase 3 — Stronger Consistency
 
@@ -218,17 +266,18 @@ RabbitMQ is replaced to align with SAA.
 * Email notifications driven by events:
 
   * SNS → SQS → notification-service
-* Optional: SES migration later (to learn AWS email)
+* Optional: migrate to **SES** later (AWS-native email)
 
 ---
 
-## 🔐 9. Security Model (Phase 1)
+## 🔐 9. Security Model (Phase 1 + 2.5)
 
 * JWT issued by `user-service` (using `jwt-core`)
 * Services validate tokens consistently using `jwt-core`
 * IAM Task Roles (no long-lived credentials)
 * Secrets stored in **SSM Parameter Store** or **Secrets Manager**
 * Compute in **private subnets**
+* **WAF + KMS + CloudTrail + GuardDuty + Inspector** added in Phase 2.5
 
 ---
 
@@ -302,6 +351,8 @@ If you can explain:
 * How DEV/PROD are isolated with Route 53
 * Where secrets live and how IAM roles access them
 * What happens when an AZ fails
+* How WAF/KMS/CloudTrail/GuardDuty fit into the security story
+* How you measure and optimize costs
 
 …then you’re thinking exactly like the SAA exam expects.
 
